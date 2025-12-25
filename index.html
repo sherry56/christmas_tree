@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 圣诞树 - Web版</title>
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0f0505; /* 默认背景 */
+            font-family: 'Great Vibes', cursive;
+            transition: background-color 0.5s;
+        }
+        canvas {
+            display: block;
+        }
+        #controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            color: white;
+            font-family: sans-serif;
+            z-index: 100;
+        }
+        select {
+            padding: 5px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="controls">
+        <label for="styleSelect">切换风格:</label>
+        <select id="styleSelect" onchange="changeStyle(this.value)">
+            <option value="1">1. 经典暗金</option>
+            <option value="2">2. 冰雪奇缘</option>
+            <option value="3">3. 自然极简</option>
+            <option value="4">4. 霓虹派对</option>
+            <option value="5">5. 黑白极简</option>
+            <option value="6">6. 粉色浪漫</option>
+        </select>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        // --- 1. 配置与风格定义 (对应 R 代码中的 styles 列表) ---
+        const styles = {
+            "1": {
+                bg_col: "#0f0505", tree_cols: ["#0B3D0B", "#144514", "#006400"],
+                trunk_col: "#3e2723", decor_cols: ["#FFD700", "#CCA43B", "#8B0000"],
+                star_col: "#FFD700", text_col: "#FFD700", snow_col: "white",
+                ribbon: true, ribbon_col: "#D4AF37", ribbon_width: 1.5
+            },
+            "2": {
+                bg_col: "#F0F2F5", tree_cols: ["#2F4F4F", "#5F9EA0", "#708090"],
+                trunk_col: "#696969", decor_cols: ["#B0C4DE", "#FFFAF0", "#E0FFFF"],
+                star_col: "#B0C4DE", text_col: "#708090", snow_col: "#87CEFA",
+                ribbon: true, ribbon_col: "#B0C4DE", ribbon_width: 1.5
+            },
+            "3": {
+                bg_col: "#1a1a1a", tree_cols: ["#556B2F", "#6B8E23", "#808000"],
+                trunk_col: "#5D4037", decor_cols: ["#CD853F", "#FFCC00"],
+                star_col: "#FFCC00", text_col: "#DEB887", snow_col: "white",
+                ribbon: false, ribbon_col: null, ribbon_width: 0
+            },
+            "4": {
+                bg_col: "#101010", tree_cols: ["#006400", "#228B22"],
+                trunk_col: "#4E342E", decor_cols: ["#FF0000", "#00FF00", "#0000FF", "#FFFF00"],
+                star_col: "#FFD700", text_col: "#FF6347", snow_col: "white",
+                ribbon: true, ribbon_col: "#C0C0C0", ribbon_width: 1.0
+            },
+            "5": {
+                bg_col: "#000000", tree_cols: ["#111111", "#050505"],
+                trunk_col: "#222222", decor_cols: ["#FFFFFF", "#FFFFE0"],
+                star_col: "#FFFFFF", text_col: "#FFFFFF", snow_col: "gray30",
+                ribbon: true, ribbon_col: "#FFFFFF", ribbon_width: 0.8
+            },
+            "6": {
+                bg_col: "#1F0F12", tree_cols: ["#D87093", "#FF69B4", "#FFB6C1"],
+                trunk_col: "#4A3728", decor_cols: ["#FFFFFF", "#FFD700", "#FF1493"],
+                star_col: "#FFD700", text_col: "#FFC0CB", snow_col: "#FFF0F5",
+                ribbon: true, ribbon_col: "#F8F8FF", ribbon_width: 0.8
+            }
+        };
+
+        let currentCfg = styles["1"];
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let points = [];
+        let snow = [];
+        let frame = 0;
+
+        // --- 2. 核心数学函数 (复刻 R 代码逻辑) ---
+        
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function random(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        function sample(arr) {
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        // 生成树的数据
+        function generateTreeData(cfg) {
+            let data = [];
+
+            // 树叶 (Leaves)
+            const n_leaves = 8000;
+            for (let i = 0; i < n_leaves; i++) {
+                let h = Math.random(); // 0 to 1
+                let base_r = 1 - h;
+                let layer_cycle = (h * 7) % 1;
+                // 复刻 R 的层级半径公式
+                let r = base_r * 0.65 * (0.4 + 0.6 * Math.pow(1 - layer_cycle, 0.7));
+                let theta = Math.random() * 2 * Math.PI;
+                
+                data.push({
+                    x: r * Math.cos(theta),
+                    y: h - 0.5,
+                    z: r * Math.sin(theta),
+                    col: sample(cfg.tree_cols),
+                    size: random(0.6, 1.8),
+                    type: 'tree',
+                    alpha: 0.95
+                });
+            }
+
+            // 树干 (Trunk)
+            const n_trunk = 1000;
+            for (let i = 0; i < n_trunk; i++) {
+                let h = random(-0.7, -0.45);
+                let r = 0.12;
+                let theta = Math.random() * 2 * Math.PI;
+                data.push({
+                    x: r * Math.cos(theta),
+                    y: h,
+                    z: r * Math.sin(theta),
+                    col: cfg.trunk_col,
+                    size: 1.2,
+                    type: 'trunk',
+                    alpha: 1
+                });
+            }
+
+            // 装饰 (Decorations)
+            const n_decor = 600;
+            for (let i = 0; i < n_decor; i++) {
+                let h = Math.random() * 0.95;
+                let base_r = 1 - h;
+                let layer_cycle = (h * 7) % 1;
+                let r = base_r * 0.68 * (0.4 + 0.6 * Math.pow(1 - layer_cycle, 0.7));
+                let theta = Math.random() * 2 * Math.PI;
+                data.push({
+                    x: r * Math.cos(theta),
+                    y: h - 0.5,
+                    z: r * Math.sin(theta),
+                    col: sample(cfg.decor_cols),
+                    size: random(2, 4), // 装饰球大一点
+                    type: 'decor',
+                    alpha: 1
+                });
+            }
+
+            // 彩带 (Ribbon)
+            if (cfg.ribbon) {
+                const n_rib = 6000;
+                for (let i = 0; i < n_rib; i++) {
+                    let h = i / n_rib * 0.95;
+                    let base_r = (1 - h) * 0.65 * 1.05;
+                    let theta = 10 * Math.PI * h;
+                    data.push({
+                        x: base_r * Math.cos(theta),
+                        y: h - 0.5,
+                        z: base_r * Math.sin(theta),
+                        col: cfg.ribbon_col,
+                        size: cfg.ribbon_width,
+                        type: 'ribbon',
+                        alpha: 1
+                    });
+                }
+            }
+
+            return data;
+        }
+
+        // 生成雪花
+        function generateSnow(n_flakes = 250) {
+            let s = [];
+            for (let i = 0; i < n_flakes; i++) {
+                s.push({
+                    x: random(-1, 1),
+                    y: random(-0.8, 1.2),
+                    z: random(-1, 1),
+                    col: currentCfg.snow_col,
+                    size: random(0.5, 2),
+                    type: 'snow',
+                    alpha: random(0.5, 0.9),
+                    speed: random(0.002, 0.005) // JS 帧率高，速度需调整
+                });
+            }
+            return s;
+        }
+
+        // 绘制星星 (2D Polygon)
+        function drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius, color) {
+            let rot = Math.PI / 2 * 3;
+            let x = cx;
+            let y = cy;
+            let step = Math.PI / spikes;
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - outerRadius);
+            for (let i = 0; i < spikes; i++) {
+                x = cx + Math.cos(rot) * outerRadius;
+                y = cy + Math.sin(rot) * outerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+
+                x = cx + Math.cos(rot) * innerRadius;
+                y = cy + Math.sin(rot) * innerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+            }
+            ctx.lineTo(cx, cy - outerRadius);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        // --- 3. 初始化 ---
+        function init() {
+            points = generateTreeData(currentCfg);
+            snow = generateSnow(300);
+            document.body.style.backgroundColor = currentCfg.bg_col;
+        }
+
+        // --- 4. 动画循环 ---
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+
+            // 旋转角度
+            let angle = frame * 0.015; 
+
+            // 处理所有点的投影
+            let projectedPoints = [];
+
+            // 1. 处理树和装饰 (旋转)
+            points.forEach(p => {
+                // 绕 Y 轴旋转
+                let x_rot = p.x * Math.cos(angle) - p.z * Math.sin(angle);
+                let z_rot = p.z * Math.cos(angle) + p.x * Math.sin(angle);
+                
+                // 透视投影 (Depth formula from R code: 1 / (2.5 - z))
+                let depth = 1 / (2.5 - z_rot);
+                let x_proj = x_rot * depth * 2;
+                let y_proj = p.y * depth * 2;
+                let size_vis = p.size * depth * 1.5;
+                
+                // 简化的透明度计算
+                let alpha_vis = p.alpha;
+                if (p.type !== 'snow') {
+                    // 简单的迷雾效果：后面的淡一点
+                    alpha_vis = p.alpha * ((z_rot + 1.2) / 2.2);
+                    if(alpha_vis < 0) alpha_vis = 0;
+                    if(alpha_vis > 1) alpha_vis = 1;
+                }
+
+                projectedPoints.push({
+                    x: x_proj,
+                    y: y_proj,
+                    z: z_rot, // 用于排序
+                    col: p.col,
+                    size: size_vis,
+                    alpha: alpha_vis,
+                    type: p.type
+                });
+            });
+
+            // 2. 处理雪花 (下落 + 旋转)
+            snow.forEach(p => {
+                p.y -= p.speed;
+                if (p.y < -0.8) p.y = 1.2; // 循环
+
+                // 雪花也跟随视角旋转一点点，显得更有立体感
+                let x_rot = p.x * Math.cos(angle * 0.5) - p.z * Math.sin(angle * 0.5);
+                let z_rot = p.z * Math.cos(angle * 0.5) + p.x * Math.sin(angle * 0.5);
+                
+                let depth = 1 / (2.5 - z_rot);
+                
+                projectedPoints.push({
+                    x: x_rot * depth * 2,
+                    y: p.y * depth * 2,
+                    z: z_rot,
+                    col: currentCfg.snow_col, // 动态更新雪花颜色
+                    size: p.size * depth * 1.5,
+                    alpha: p.alpha,
+                    type: 'snow'
+                });
+            });
+
+            // 3. 深度排序 (Painter's Algorithm: 画家算法，先画远的)
+            // z_rot 越小越远 (因为我们是从正z看过去，或者反之，这里 R 代码逻辑是 z 越小 depth 越小)
+            // depth = 1 / (2.5 - z). 如果 z 是 -1 (远), depth = 1/3.5 (小). 如果 z 是 1 (近), depth = 1/1.5 (大).
+            // 我们要先画 depth 小的。
+            projectedPoints.sort((a, b) => a.z - b.z); 
+
+            // 4. 绘制所有点
+            // 坐标映射：R代码是 x[-0.8, 0.8] -> Web Canvas 坐标
+            let scale = Math.min(width, height) / 1.8; // 缩放系数
+            let cx = width / 2;
+            let cy = height / 2 + height * 0.1; // 稍微向下偏移
+
+            projectedPoints.forEach(p => {
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.col;
+                ctx.beginPath();
+                // 坐标转换
+                let sx = cx + p.x * scale;
+                let sy = cy - p.y * scale; // Y轴翻转，Canvas Y向下是正
+
+                ctx.arc(sx, sy, Math.max(0.5, p.size * (scale/300)), 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // 5. 绘制文字 (Merry Christmas)
+            ctx.globalAlpha = 1;
+            ctx.font = `60px 'Great Vibes'`;
+            ctx.fillStyle = currentCfg.text_col;
+            ctx.textAlign = "center";
+            ctx.fillText("Merry Christmas", width / 2, height * 0.15);
+
+            // 6. 绘制星星 (在树顶, y=0.5 左右)
+            // 树顶坐标大致是 (0, 0.5, 0)。
+            // 我们计算树顶的投影位置，让星星看起来跟着树移动一点点（也可以固定）
+            // 这里为了简单且复刻R的效果，我们固定在树尖位置，但做一点点上下浮动效果
+            let topY = cy - 0.45 * scale; 
+            drawStar(ctx, width/2, topY, 5, 25, 12, currentCfg.star_col);
+
+            frame++;
+            requestAnimationFrame(animate);
+        }
+
+        // --- 切换风格 ---
+        function changeStyle(id) {
+            currentCfg = styles[id];
+            init(); // 重新生成颜色和点
+        }
+
+        // 启动
+        init();
+        animate();
+
+    </script>
+</body>
+</html>
