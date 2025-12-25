@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D 圣诞树 - 3D音乐版</title>
+    <title>3D 圣诞树 - 3D版</title>
     <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #0f0505; /* 默认背景 */
+            background-color: #0f0505;
             font-family: 'Great Vibes', cursive;
             transition: background-color 0.5s;
-            user-select: none; /* 防止双击选中文本 */
+            user-select: none;
         }
         canvas {
             display: block;
@@ -22,11 +22,7 @@
             position: absolute;
             top: 20px;
             right: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
             z-index: 100;
-            align-items: flex-end;
         }
         
         /* 下拉菜单样式 */
@@ -46,37 +42,11 @@
             cursor: pointer;
             outline: none;
         }
-
-        /* 音乐按钮样式 */
-        #music-btn {
-            cursor: pointer;
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        #music-btn:hover {
-            background: rgba(255, 255, 255, 0.4);
-            transform: scale(1.05);
-        }
-        /* 音乐播放时的旋转动画 */
-        .rotating {
-            animation: spin 3s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
     </style>
 </head>
 <body>
 
-    <audio id="bgm" loop>
-        <source src="https://music.163.com/song/media/outer/url?id=488249475.mp3" type="audio/mpeg">
-        您的浏览器不支持音频元素。
-    </audio>
+    <audio id="bgm" src="music.mp3" autoplay loop></audio>
 
     <div id="controls">
         <div class="control-box">
@@ -90,67 +60,31 @@
                 <option value="6">6. 粉色浪漫</option>
             </select>
         </div>
-        
-        <button id="music-btn" class="control-box" onclick="toggleMusic()">
-            <span id="music-icon">🔇</span> 
-            <span id="music-text">播放音乐</span>
-        </button>
     </div>
 
     <canvas id="canvas"></canvas>
 
     <script>
-        // --- 音乐控制逻辑 ---
+        // --- 音乐自动播放逻辑 ---
         const audio = document.getElementById('bgm');
-        const musicBtn = document.getElementById('music-btn');
-        const musicIcon = document.getElementById('music-icon');
-        const musicText = document.getElementById('music-text');
-        let isPlaying = false;
 
-        // 尝试自动播放的函数
-        function tryPlayMusic() {
-            if (!isPlaying) {
-                audio.play().then(() => {
-                    isPlaying = true;
-                    updateMusicUI();
-                }).catch(error => {
-                    console.log("浏览器阻止了自动播放，等待用户交互");
-                });
-            }
-        }
+        // 1. 网页加载完成后尝试直接播放
+        window.addEventListener('load', () => {
+            audio.play().catch(e => {
+                console.log("浏览器拦截了自动播放，等待用户点击交互...");
+            });
+        });
 
-        // 切换音乐状态
-        function toggleMusic() {
-            if (isPlaying) {
-                audio.pause();
-                isPlaying = false;
-            } else {
-                audio.play();
-                isPlaying = true;
-            }
-            updateMusicUI();
-        }
-
-        // 更新按钮UI
-        function updateMusicUI() {
-            if (isPlaying) {
-                musicIcon.innerText = "🎵";
-                musicIcon.classList.add("rotating"); // 添加旋转效果
-                musicText.innerText = "正在播放";
-            } else {
-                musicIcon.innerText = "🔇";
-                musicIcon.classList.remove("rotating");
-                musicText.innerText = "播放音乐";
-            }
-        }
-
-        // *** 关键：添加全屏点击监听，利用第一次交互启动音乐 ***
+        // 2. 添加全屏点击监听 (作为浏览器拦截后的备份方案)
+        // 只要用户点一下屏幕（任何地方），音乐就会开始
         document.body.addEventListener('click', function() {
-            tryPlayMusic();
-        }, { once: true }); // 只执行一次
+            if (audio.paused) {
+                audio.play();
+            }
+        }, { once: true }); // 只执行一次，避免重复触发
 
         // ----------------------------------------------------
-        // --- 下面是之前的 3D 圣诞树核心代码 (无需改动) ---
+        // --- 3D 圣诞树核心代码 ---
         // ----------------------------------------------------
 
         const styles = {
@@ -376,8 +310,6 @@
         function changeStyle(id) {
             currentCfg = styles[id];
             init();
-            // 切换风格也算交互，如果音乐没开始，这里也会触发播放
-            tryPlayMusic(); 
         }
 
         init();
@@ -385,4 +317,3 @@
     </script>
 </body>
 </html>
-
